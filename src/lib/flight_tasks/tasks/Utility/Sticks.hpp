@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (c) 2017 PX4 Development Team. All rights reserved.
+ *   Copyright (c) 2020 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,37 +32,43 @@
  ****************************************************************************/
 
 /**
- * @file FlightManualPositionSmooth.cpp
+ * @file Sticks.hpp
+ *
+ * Library abstracting stick input from manual_control_setpoint
+ *
+ * @author Matthias Grob <maetugr@gmail.com>
  */
 
-#include "FlightTaskManualPositionSmooth.hpp"
+#pragma once
 
-using namespace matrix;
+#include <px4_platform_common/module_params.h>
+#include <matrix/matrix/math.hpp>
+#include <uORB/Subscription.hpp>
+#include <uORB/topics/landing_gear.h>
+#include <uORB/topics/manual_control_setpoint.h>
 
-FlightTaskManualPositionSmooth::FlightTaskManualPositionSmooth() :
-	_smoothingXY(this, Vector2f(_velocity)),
-	_smoothingZ(this, _velocity(2), _sticks.getPosition()(2))
-{}
-
-void FlightTaskManualPositionSmooth::_updateSetpoints()
+class Sticks : public ModuleParams
 {
-	/* Get yaw setpont, un-smoothed position setpoints.*/
-	FlightTaskManualPosition::_updateSetpoints();
+public:
+	Sticks() = default;
+	~Sticks() = default;
 
-	/* Smooth velocity setpoint in xy.*/
-	Vector2f vel(_velocity);
-	Vector2f vel_sp_xy(_velocity_setpoint);
-	_smoothingXY.updateMaxVelocity(_constraints.speed_xy);
-	_smoothingXY.smoothVelocity(vel_sp_xy, vel, _yaw, _yawspeed_setpoint, _deltatime);
-	_velocity_setpoint(0) = vel_sp_xy(0);
-	_velocity_setpoint(1) = vel_sp_xy(1);
+	bool evaluateSticks(hrt_abstime now, landing_gear_s &gear); ///< checks and sets stick inputs
+	void applyGearSwitch(uint8_t gear_switch, landing_gear_s &gear); ///< Sets gears according to switch
+	const matrix::Vector<float, 4> &getPosition() { return _positions; };
+	const matrix::Vector<float, 4> &getPositionExpo() { return _positions_expo; };
+private:
+	matrix::Vector<float, 4> _positions; ///< unmodified manual stick inputs
+	matrix::Vector<float, 4> _positions_expo; ///< modified manual sticks using expo function
+	int _gear_switch_old = manual_control_setpoint_s::SWITCH_POS_NONE; ///< old switch state
 
-	/* Check for xy position lock.*/
-	_updateXYlock();
+	uORB::SubscriptionData<manual_control_setpoint_s> _sub_manual_control_setpoint{ORB_ID(manual_control_setpoint)};
 
-	/* Smooth velocity in z.*/
-	_smoothingZ.smoothVelFromSticks(_velocity_setpoint(2), _deltatime);
-
-	/* Check for altitude lock*/
-	_updateAltitudeLock();
-}
+	DEFINE_PARAMETERS(
+		(ParamFloat<px4::params::MPC_HOLD_DZ>) _param_mpc_hold_dz,
+		(ParamFloat<px4::params::MPC_XY_MAN_EXPO>) _param_mpc_xy_man_expo,
+		(ParamFloat<px4::params::MPC_Z_MAN_EXPO>) _param_mpc_z_man_expo,
+		(ParamFloat<px4::params::MPC_YAW_EXPO>) _param_mpc_yaw_expo,
+		(ParamFloat<px4::params::COM_RC_LOSS_T>) _param_com_rc_loss_t
+	)
+};
