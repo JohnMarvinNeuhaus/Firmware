@@ -46,7 +46,10 @@
 class FlightTaskManual : public FlightTask
 {
 public:
-	FlightTaskManual() = default;
+	FlightTaskManual() :
+		_sticks(this)
+	{};
+
 	virtual ~FlightTaskManual() = default;
 
 	bool applyCommandParameters(const vehicle_command_s &command) override { return FlightTask::applyCommandParameters(command); };

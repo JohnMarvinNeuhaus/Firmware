@@ -50,7 +50,9 @@
 class Sticks : public ModuleParams
 {
 public:
-	Sticks() = default;
+	Sticks(ModuleParams *parent) :
+		ModuleParams(parent)
+	{};
 	~Sticks() = default;
 
 	bool evaluateSticks(hrt_abstime now, landing_gear_s &gear); ///< checks and sets stick inputs
